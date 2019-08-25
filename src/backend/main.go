@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
-	"net/http"
-
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"net/http"
 )
 
 var upgrader = websocket.Upgrader{
@@ -13,12 +13,20 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: 	 func(r *http.Request) bool { return true },
 }
 
-var connections = make([]*websocket.Conn, 0)
+var room = &Room {
+	uuid.New(),
+	`import fmt
 
 func main() {
-	fmt.Println("Shared notepad app started")
-	http.HandleFunc("/room/join", WebsocketHandler)
+	fmt.Printf("Hello world!")
+}`,
+}
 
+var clientsToRoomsMapping = make(map[Client]*Room, 0)
+
+func main() {
+	fmt.Println("App started")
+	http.HandleFunc("/room/join", WebsocketHandler)
 	_ = http.ListenAndServe(":5000", nil)
 }
 
@@ -27,7 +35,13 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 	if err  != nil {
 		return
 	}
- 	connections = append(connections, currentConnection)
+
+	if err = currentConnection.WriteMessage(1, []byte(room.text)); err != nil {
+		currentConnection.Close()
+		return
+	}
+
+	clientsToRoomsMapping[Client{currentConnection}] = room
 
 	for {
 		msgType, msg, err := currentConnection.ReadMessage()
@@ -35,18 +49,26 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		fmt.Printf("%s received: %s\n", currentConnection.RemoteAddr(), string(msg))
+		room.text = string(msg)
 
-		for _, connection := range connections {
-			if connection == currentConnection {
+		for client := range clientsToRoomsMapping {
+			if client.connection == currentConnection {
 				continue
 			}
 
-			if err = connection.WriteMessage(msgType, msg); err != nil {
-				return
+			if err = client.connection.WriteMessage(msgType, msg); err != nil {
+				client.connection.Close()
+				delete(clientsToRoomsMapping, client)
 			}
-
-			fmt.Printf("%s sent: %s\n", connection.RemoteAddr(), string(msg))
 		}
 	}
+}
+
+type Client struct {
+	connection	*websocket.Conn
+}
+
+type Room struct {
+	id		uuid.UUID
+	text 	string
 }

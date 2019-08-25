@@ -1,8 +1,7 @@
 <div
-    #editor
     class="editable"
     contenteditable="true"
     tabindex="-1"
-    [textContent]="text"
-    (input)="input.next($event.target.textContent)"
+    [innerHTML]="text"
+    (input)="onChange($event)"
 >{{text}}</div>

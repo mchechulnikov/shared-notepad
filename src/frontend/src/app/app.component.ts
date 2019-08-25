@@ -1,6 +1,6 @@
-import {AfterViewInit, Component, HostListener, Input, OnInit, ViewChild} from '@angular/core';
-import {Observable, Subject} from 'rxjs';
-import {debounceTime, distinctUntilChanged, subscribeOn} from "rxjs/operators";
+import {AfterViewInit, Component, HostListener, Input, OnInit} from '@angular/core';
+import {Subject} from 'rxjs';
+import {debounceTime, distinctUntilChanged} from 'rxjs/operators';
 
 @Component({
   selector: 'app-root',
@@ -12,16 +12,13 @@ export class AppComponent implements OnInit, AfterViewInit {
   @Input() input = new Subject<string>();
   text = '';
 
-  // @ts-ignore
-  @ViewChild('editor') editorEl;
-
-  // private static indent(withShift: boolean): void {
-  //   if (withShift) {
-  //     document.execCommand('outdent', true, null);
-  //   } else {
-  //     document.execCommand('indent', true, null);
-  //   }
-  // }
+  private static indent(withShift: boolean): void {
+    if (withShift) {
+      document.execCommand('outdent', true, null);
+    } else {
+      document.execCommand('indent', true, null);
+    }
+  }
 
   private static insert(str: string): void {
     document.execCommand('insertText', true, str);
@@ -32,13 +29,20 @@ export class AppComponent implements OnInit, AfterViewInit {
   }
 
   ngOnInit(): void {
-    this.socket.onmessage = (e) => this.text = e.data;
+    this.socket.onmessage = (e) => {
+      let value = e.data;
+      value = value
+        .split('\n')
+        .map(x => '<div>' + (x ? x : '<br>') + '</div>').
+        join('');
+      this.text = value;
+    };
   }
 
   ngAfterViewInit(): void {
     this.input
       .pipe(
-        debounceTime(500),
+        debounceTime(300),
         distinctUntilChanged()
       )
       .subscribe((value) => this.socket.send(value));
@@ -48,15 +52,20 @@ export class AppComponent implements OnInit, AfterViewInit {
   onKeyDown(event: KeyboardEvent) {
     const selection = document.getSelection().toString();
     switch (event.key) {
+      // case 'Enter':
+      //   //AppComponent.insert('\n');
+      //   //document.execCommand('defaultParagraphSeparator', true, 'br');
+      //   //document.execCommand('insertHTML',false,'<br>');
+      //   //event.preventDefault();
+      //   break;
       case 'Tab':
-        AppComponent.insert('    ');
+        AppComponent.indent(event.shiftKey);
+        //AppComponent.insert('    ');
         event.preventDefault();
         break;
       case '(':
         AppComponent.insert(selection ? '(' + selection + ')' : '()');
         event.preventDefault();
-        this.editorEl.nativeElement.focus();
-        this.editorEl.nativeElement.setSelectionRange(1, 1);
         break;
       case '[':
         AppComponent.insert(selection ? '[' + selection + ']' : '[]');
@@ -67,5 +76,46 @@ export class AppComponent implements OnInit, AfterViewInit {
         event.preventDefault();
         break;
     }
+  }
+
+  onChange(e) {
+    let value = e.target.innerHTML;
+
+    // Convert `&amp;` to `&`.
+    value = value.replace(/&amp;/gi, '&');
+
+    // Replace spaces.
+    value = value.replace(/&nbsp;/gi, ' ');
+
+    // Remove "<b>".
+    value = value.replace(/<b>/gi, '');
+    value = value.replace(/<\/b>/gi, '');
+
+    // Remove "<strong>".
+    value = value.replace(/<strong>/gi, '');
+    value = value.replace(/<\/strong>/gi, '');
+
+    // Remove "<i>".
+    value = value.replace(/<i>/gi, '');
+    value = value.replace(/<\/i>/gi, '');
+
+    // Remove "<em>".
+    value = value.replace(/<em>/gi, '');
+    value = value.replace(/<\/em>/gi, '');
+
+    // Remove "<u>".
+    value = value.replace(/<u>/gi, '');
+    value = value.replace(/<\/u>/gi, '');
+
+    // Replace "<div>" (from Chrome).
+    value = value.replace(/<div>/gi, '\n');
+    value = value.replace(/<\/div>/gi, '');
+    value = value.replace(/^\n/gi, '');
+
+    // Replace "<p>" (from IE).
+    value = value.replace(/<p>/gi, '\n');
+    value = value.replace(/<\/p>/gi, '');
+
+    this.input.next(value);
   }
 }
