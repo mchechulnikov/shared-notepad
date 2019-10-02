@@ -29,14 +29,7 @@ export class AppComponent implements OnInit, AfterViewInit {
   }
 
   ngOnInit(): void {
-    this.socket.onmessage = (e) => {
-      let value = e.data;
-      value = value
-        .split('\n')
-        .map(x => '<div>' + (x ? x : '<br>') + '</div>').
-        join('');
-      this.text = value;
-    };
+    this.socket.onmessage = (e) => this.handleWsMessage(e.data);
   }
 
   ngAfterViewInit(): void {
@@ -45,7 +38,13 @@ export class AppComponent implements OnInit, AfterViewInit {
         debounceTime(300),
         distinctUntilChanged()
       )
-      .subscribe((value) => this.socket.send(value));
+      .subscribe((value) => {
+        this.socket.send(JSON.stringify({
+          actor_name: 'Foo',
+          event_type: 'TextChanged',
+          text: btoa(value)
+        }));
+      });
   }
 
   @HostListener('window:keydown', ['$event'])
@@ -60,7 +59,7 @@ export class AppComponent implements OnInit, AfterViewInit {
       //   break;
       case 'Tab':
         AppComponent.indent(event.shiftKey);
-        //AppComponent.insert('    ');
+        // AppComponent.insert('    ');
         event.preventDefault();
         break;
       case '(':
@@ -117,5 +116,13 @@ export class AppComponent implements OnInit, AfterViewInit {
     value = value.replace(/<\/p>/gi, '');
 
     this.input.next(value);
+  }
+
+  private handleWsMessage(value: any): void {
+    value = atob(JSON.parse(value).text)
+      .split('\n')
+      .map(x => '<div>' + (x ? x : '<br>') + '</div>').
+      join('');
+    this.text = value;
   }
 }
